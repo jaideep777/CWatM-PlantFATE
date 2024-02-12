@@ -8,6 +8,7 @@
 # Copyright:   (c) PB 2016 based on PCRGLOBE, LISFLOOD, HBV
 # -------------------------------------------------------------------------
 
+import plantfate as pf
 from cwatm.management_modules.data_handling import *
 
 
@@ -217,6 +218,19 @@ class soil(object):
         if 'gw_depth_sim_obs' in binding:
             self.var.gwdepth_adjuster = loadmap('gw_depth_sim_obs')
 
+        # Initialise PlantFATE cell
+        # load init file from config file
+        # TODO: check if this is correct way to do it; make sure default is None?
+        p_ini_file = loadmap("plantFATE_init_file")
+        # See if using PF
+        self.use_PF = False
+
+        # Initialise PlantFATE cell (global for now) - single cell use
+        if p_ini_file is not None:
+            self.use_PF = True
+            self.model.plantFATE = []
+            self.model.append(pf.Model(p_ini_file))
+
 # --------------------------------------------------------------------------
 # --------------------------------------------------------------------------
 
@@ -399,9 +413,138 @@ class soil(object):
         # transpiration is 0 when soil is frozen
         TaMax = np.where(self.var.FrostIndex > self.var.FrostIndexThreshold, 0., TaMax)
 
-        ta1 = np.maximum(np.minimum(TaMax * self.var.adjRoot[0][No], self.var.w1[No] - self.var.wwp1[No]), 0.0)
-        ta2 = np.maximum(np.minimum(TaMax * self.var.adjRoot[1][No], self.var.w2[No] - self.var.wwp2[No]), 0.0)
-        ta3 = np.maximum(np.minimum(TaMax * self.var.adjRoot[2][No], self.var.w3[No] - self.var.wwp3[No]), 0.0)
+        # For now this version only supports one plantFATE cell
+        if self.use_PF:
+            # not sure what this bit is for... possibly don't need it?
+            transpiration_plantFATE = np.zeros_like(
+                self.plantFATE_forest_RUs, dtype=np.float32
+            )  # transpiration in a hydrological model is transpiration from plants and evaporation from the plant's surface in plantFATE.
+            # soil_specific_depletion_1_plantFATE = np.zeros_like(self.plantFATE_forest_RUs, dtype=np.float32)
+            # soil_specific_depletion_2_plantFATE = np.zeros_like(self.plantFATE_forest_RUs, dtype=np.float32)
+            # soil_specific_depletion_3_plantFATE = np.zeros_like(self.plantFATE_forest_RUs, dtype=np.float32)
+            # simply doing the first cell for the time being...
+            forest_RU_idx = 0
+            forest_grid = self.var.HRU_to_grid[forest_RU_idx]
+
+            plantFATE_data = {
+                "soil_moisture_layer_1": self.var.w1[
+                    forest_RU_idx
+                ],  # this is not used for now
+                "soil_moisture_layer_2": self.var.w2[forest_RU_idx],
+                "soil_moisture_layer_3": self.var.w3[
+                    forest_RU_idx
+                ],  # this is not used for now
+                "soil_tickness_layer_1": self.var.rootDepth1[
+                    forest_RU_idx
+                ],  # this is not used for now
+                "soil_tickness_layer_2": self.var.rootDepth2[forest_RU_idx],
+                "soil_tickness_layer_3": self.var.rootDepth3[
+                    forest_RU_idx
+                ],  # this is not used for now
+                "soil_moisture_wilting_point_1": self.var.wwp1[
+                    forest_RU_idx
+                ],  # this is not used for now
+                "soil_moisture_wilting_point_2": self.var.wwp2[forest_RU_idx],
+                "soil_moisture_wilting_point_3": self.var.wwp3[
+                    forest_RU_idx
+                ],  # this is not used for now
+                "soil_moisture_field_capacity_1": self.var.wfc1[
+                    forest_RU_idx
+                ],  # this is not used for now
+                "soil_moisture_field_capacity_2": self.var.wfc2[forest_RU_idx],
+                "soil_moisture_field_capacity_3": self.var.wfc3[
+                    forest_RU_idx
+                ],  # this is not used for now
+                "temperature": self.model.data.grid.tas[forest_grid]
+                               - 273.15,  # K to C
+                "relative_humidity": self.model.data.grid.hurs[forest_grid],
+                "shortwave_radiation": self.model.data.grid.rsds[forest_grid],
+            }
+
+            if (
+                    self.model.current_timestep == 1
+                    # and self.model.scenario == "spinup"
+            ):
+                self.model.plantFATE[forest_RU_idx].first_step(
+                    tstart=self.model.current_time, **plantFATE_data
+                )
+                transpiration_plantFATE[forest_RU_idx], _, _, _ = (
+                    0,
+                    0,
+                    0,
+                    0,
+                )  # first timestep, set all to 0. Just for initialization of spinup.
+            else:
+                (
+                    transpiration_plantFATE[forest_RU_idx],
+                    _,
+                    _,
+                    _,
+                ) = self.model.plantFATE[forest_RU_idx].step(**plantFATE_data)
+
+            ta1 = np.maximum(
+                np.minimum(
+                    TaMax * self.var.adjRoot[0][forest_RU_idx],
+                    self.var.w1[forest_RU_idx] - self.var.wwp1[forest_RU_idx],
+                ),
+                0.0,
+            )
+            ta2 = np.maximum(
+                np.minimum(
+                    TaMax * self.var.adjRoot[1][forest_RU_idx],
+                    self.var.w2[forest_RU_idx] - self.var.wwp2[forest_RU_idx],
+                ),
+                0.0,
+            )
+            ta3 = np.maximum(
+                np.minimum(
+                    TaMax * self.var.adjRoot[2][forest_RU_idx],
+                    self.var.w3[forest_RU_idx] - self.var.wwp3[forest_RU_idx],
+                ),
+                0.0,
+            )
+
+            ### this appears to be all the subgrid stuff from ABCWatM
+            # Todo: cleanup and make CWatM base compatible
+
+            CWatM_w_in_plantFATE_cells = (
+                self.var.w1[self.plantFATE_forest_RUs]
+                + self.var.w2[self.plantFATE_forest_RUs]
+                + self.var.w3[self.plantFATE_forest_RUs]
+            )
+
+            bioarea_forest = self.plantFATE_forest_RUs[bioarea]
+            ta1[bioarea_forest] = (
+                self.var.w1[self.plantFATE_forest_RUs]
+                / CWatM_w_in_plantFATE_cells
+                * transpiration_plantFATE[self.plantFATE_forest_RUs]
+            )
+            ta2[bioarea_forest] = (
+                self.var.w2[self.plantFATE_forest_RUs]
+                / CWatM_w_in_plantFATE_cells
+                * transpiration_plantFATE[self.plantFATE_forest_RUs]
+            )
+            ta3[bioarea_forest] = (
+                self.var.w3[self.plantFATE_forest_RUs]
+                / CWatM_w_in_plantFATE_cells
+                * transpiration_plantFATE[self.plantFATE_forest_RUs]
+            )
+
+            assert self.model.waterbalance_module.waterBalanceCheck(
+                how="cellwise",
+                influxes=[
+                    ta1[bioarea_forest],
+                    ta2[bioarea_forest],
+                    ta3[bioarea_forest],
+                ],
+                outfluxes=[transpiration_plantFATE[self.plantFATE_forest_RUs]],
+                tollerance=1e-7,
+            )
+
+        else:
+            ta1 = np.maximum(np.minimum(TaMax * self.var.adjRoot[0][No], self.var.w1[No] - self.var.wwp1[No]), 0.0)
+            ta2 = np.maximum(np.minimum(TaMax * self.var.adjRoot[1][No], self.var.w2[No] - self.var.wwp2[No]), 0.0)
+            ta3 = np.maximum(np.minimum(TaMax * self.var.adjRoot[2][No], self.var.w3[No] - self.var.wwp3[No]), 0.0)
 
         #if (dateVar['curr'] == 23) and (No==1):
         #    ii=1
