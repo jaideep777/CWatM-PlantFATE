@@ -8,9 +8,10 @@
 # Copyright:   (c) PB 2016 based on PCRGLOBE, LISFLOOD, HBV
 # -------------------------------------------------------------------------
 
-#import plantfate as pf
+import cwatm.hydrological_modules.plantfate as pf
 from cwatm.management_modules.data_handling import *
 import numpy as np
+import os
 
 class soil(object):
 
@@ -223,16 +224,63 @@ class soil(object):
         # TODO: check if this is correct way to do it; make sure default is None?
         # See if using PF
         self.use_PF = False
+        self.var.transpiration_plantFATE = globals.inZero
         if 'coupling_plantFATE' in option:
             self.use_PF = checkOption('coupling_plantFATE')
 
+        def create_ini(idx, plantFATE_cluster, biodiversity_scenario):
+
+            out_dir = cbinding("PathOut")+'/plantFATE/fcell_'+str(idx)
+            print(out_dir)
+            #os.mkdir(out_dir)
+            ini_file = out_dir+"/p_daily.ini"
+
+            """
+            with open(ini_file, "w") as f:
+                for section, section_dict in yaml.items():
+                    f.write(section + "\n")
+                    if section_dict is None:
+                        continue
+                    for key, value in section_dict.items():
+                        if value is None:
+                            value = "null"
+                        elif value is False:
+                            value = "no"
+                        elif value is True:
+                            value = "yes"
+                        f.write(key + " " + str(value) + "\n")
+            return ini_file
+            """
+
+            f = open(cbinding('plantFATE_init_file'), "r")
+
+            dirname = os.path.dirname(ini_file)
+            if not os.path.exists(dirname):
+                os.makedirs(dirname)
+
+            copy = open(ini_file, "w")
+            for line in f:
+                copy.write(line)
+            f.close()
+
+            return copy
+
         if self.use_PF:
+
             self.model.plantFATE = []
-            self.model.append(pf.Model(p_ini_file))
-            p_ini_file = loadmap("plantFATE_init_file")
+            for i in range(len(self.var.transpiration_plantFATE)):
+                #plantFATE_cluster = 7
+                #biodiversity_scenario = 'low'
 
-        # Initialise PlantFATE cell (global for now) - single cell use
+                #ini_path = create_ini(
+                #    i,
+                #    plantFATE_cluster,
+                #    biodiversity_scenario,
+                #)
 
+                self.model.plantFATE.append(pf.Model(cbinding('plantFATE_init_file')))
+
+        return None
 
 # --------------------------------------------------------------------------
 # --------------------------------------------------------------------------
@@ -415,13 +463,13 @@ class soil(object):
         # transpiration is 0 when soil is frozen
         TaMax = np.where(self.var.FrostIndex > self.var.FrostIndexThreshold, 0., TaMax)
 
-        print('self.var.w1[0] in soil.py', self.var.w1[0])
-        print('self.var.w2[0] in soil.py', self.var.w2[0])
-        print('self.var.w3[0] in soil.py', self.var.w3[0])
+        #print('self.var.w1[0] in soil.py', self.var.w1[0])
+        #print('self.var.w2[0] in soil.py', self.var.w2[0])
+        #print('self.var.w3[0] in soil.py', self.var.w3[0])
 
         # For now this version only supports one plantFATE cell
         if self.use_PF:
-            transpiration_plantFATE = globals.inZero.copy()
+            #transpiration_plantFATE = globals.inZero.copy()
             # not sure what this bit is for... possibly don't need it?
             # transpiration_plantFATE = np.zeros_like(self.plantFATE_forest_RUs, dtype=np.float32)  # transpiration in a hydrological model is transpiration from plants and evaporation from the plant's surface in plantFATE.
             # soil_specific_depletion_1_plantFATE = np.zeros_like(self.plantFATE_forest_RUs, dtype=np.float32)
@@ -435,40 +483,41 @@ class soil(object):
                 "soil_moisture_layer_1": self.var.w1[forest_RU_idx],  # this is not used for now
                 "soil_moisture_layer_2": self.var.w2[forest_RU_idx],
                 "soil_moisture_layer_3": self.var.w3[forest_RU_idx],  # this is not used for now
-                "soil_tickness_layer_1": self.var.rootDepth1[forest_RU_idx],  # this is not used for now
-                "soil_tickness_layer_2": self.var.rootDepth2[forest_RU_idx],
-                "soil_tickness_layer_3": self.var.rootDepth3[forest_RU_idx],  # this is not used for now
+                "soil_tickness_layer_1": self.var.rootDepth[0][forest_RU_idx],  # this is not used for now
+                "soil_tickness_layer_2": self.var.rootDepth[1][forest_RU_idx],
+                "soil_tickness_layer_3": self.var.rootDepth[2][forest_RU_idx],  # this is not used for now
                 "soil_moisture_wilting_point_1": self.var.wwp1[forest_RU_idx],  # this is not used for now
                 "soil_moisture_wilting_point_2": self.var.wwp2[forest_RU_idx],
                 "soil_moisture_wilting_point_3": self.var.wwp3[forest_RU_idx],  # this is not used for now
                 "soil_moisture_field_capacity_1": self.var.wfc1[forest_RU_idx],  # this is not used for now
                 "soil_moisture_field_capacity_2": self.var.wfc2[forest_RU_idx],
                 "soil_moisture_field_capacity_3": self.var.wfc3[forest_RU_idx],  # this is not used for now
-                "temperature": self.model.data.grid.tas[forest_RU_idx] - 273.15,  # K to C
-                "relative_humidity": self.model.data.grid.hurs[forest_RU_idx],
-                "shortwave_radiation": self.model.data.grid.rsds[forest_RU_idx],
+                "temperature": self.var.Tavg - 273.15,  # K to C
+                "relative_humidity": self.var.Qair,
+                "shortwave_radiation": self.var.Rsds,
             }
 
-            if (
-                    self.model.current_timestep == 1
-                    # and self.model.scenario == "spinup"
-            ):
-                self.model.plantFATE[forest_RU_idx].first_step(
-                    tstart=self.model.current_time, **plantFATE_data
-                )
-                transpiration_plantFATE[forest_RU_idx], _, _, _ = (
-                    0,
-                    0,
-                    0,
-                    0,
-                )  # first timestep, set all to 0. Just for initialization of spinup.
-            else:
-                (
-                    transpiration_plantFATE[forest_RU_idx],
-                    _,
-                    _,
-                    _,
-                ) = self.model.plantFATE[forest_RU_idx].step(**plantFATE_data)
+            for m in range(len(self.model.plantFATE)):
+                if dateVar['newStart']:
+                    # wants tstart (What format?), with variables like tend (where is this).
+                    # Variables in plantFATE_data are different
+
+                    self.model.plantFATE[m].first_step(
+                        tstart=self.model.current_time, **plantFATE_data
+                    )
+                    self.var.transpiration_plantFATE[m], _, _, _ = (
+                        0,
+                        0,
+                        0,
+                        0,
+                    )  # first timestep, set all to 0. Just for initialization of spinup.
+                else:
+                    (
+                        self.var.transpiration_plantFATE[m],
+                        _,
+                        _,
+                        _,
+                    ) = self.model.plantFATE[m].step(**plantFATE_data)
 
             ta1 = np.maximum(
                 np.minimum(
@@ -491,9 +540,6 @@ class soil(object):
                 ),
                 0.0,
             )
-
-            ### this appears to be all the subgrid stuff from ABCWatM
-            # Todo: cleanup and make CWatM base compatible
 
             CWatM_w_in_plantFATE_cells = (
                 self.var.w1[forest_RU_idx]
