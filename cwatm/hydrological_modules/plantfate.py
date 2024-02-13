@@ -6,7 +6,6 @@ import pandas as pd
 from plantFATE import Simulator as sim
 from plantFATE import Clim
 
-
 # Module will be moved to plantFATE package eventually and called from there
 
 class Model:
@@ -27,6 +26,8 @@ class Model:
         )
         self.emergentProps = pd.DataFrame()
         self.speciesProps = pd.DataFrame()
+
+
 
     def runstep(
         self,
@@ -126,21 +127,55 @@ class Model:
     def first_step(
         self,
         tstart,
-        tend,
-        temperature0,  # degrees Celcius, mean temperature
-        photosynthetic_photon_flux_density0,
-        vapour_pressure_deficit0,
-        soil_water_potential0
+        soil_moisture_layer_1,  # ratio [0-1]
+        soil_moisture_layer_2,  # ratio [0-1]
+        soil_moisture_layer_3,  # ratio [0-1]
+        soil_tickness_layer_1,  # m
+        soil_tickness_layer_2,  # m
+        soil_tickness_layer_3,  # m
+        soil_moisture_wilting_point_1,  # ratio [0-1]
+        soil_moisture_wilting_point_2,  # ratio [0-1]
+        soil_moisture_wilting_point_3,  # ratio [0-1]
+        soil_moisture_field_capacity_1,  # ratio [0-1]
+        soil_moisture_field_capacity_2,  # ratio [0-1]
+        soil_moisture_field_capacity_3,  # ratio [0-1]
+        temperature,  # degrees Celcius, mean temperature
+        relative_humidity,  # percentage [0-100]
+        shortwave_radiation,  # W/m2, daily mean
     ):
+        (
+            soil_water_potential,
+            vapour_pressure_deficit,
+            photosynthetic_photon_flux_density,
+            temperature,
+        ) = self.get_plantFATE_input(
+            soil_moisture_layer_1,  # ratio [0-1]
+            soil_moisture_layer_2,  # ratio [0-1]
+            soil_moisture_layer_3,  # ratio [0-1]
+            soil_tickness_layer_1,  # m
+            soil_tickness_layer_2,  # m
+            soil_tickness_layer_3,  # m
+            soil_moisture_wilting_point_1,  # ratio [0-1]
+            soil_moisture_wilting_point_2,  # ratio [0-1]
+            soil_moisture_wilting_point_3,  # ratio [0-1]
+            soil_moisture_field_capacity_1,  # ratio [0-1]
+            soil_moisture_field_capacity_2,  # ratio [0-1]
+            soil_moisture_field_capacity_3,  # ratio [0-1]
+            temperature,  # degrees Celcius, mean temperature
+            relative_humidity,  # percentage [0-100]
+            shortwave_radiation)  # W/m2, daily mean
 
         newclim = Clim()
-        newclim.tc = temperature0  # C
-        newclim.ppfd_max = photosynthetic_photon_flux_density0 * 4
-        newclim.ppfd = photosynthetic_photon_flux_density0
-        newclim.vpd = vapour_pressure_deficit0 * 1000  # kPa -> Pa
-        newclim.swp = soil_water_potential0  # MPa
+        newclim.tc = temperature - 273.15  # C
+        newclim.ppfd_max = photosynthetic_photon_flux_density * 4
+        newclim.ppfd = photosynthetic_photon_flux_density
+        newclim.vpd = vapour_pressure_deficit * 1000  # kPa -> Pa
+        newclim.swp = soil_water_potential  # MPa
 
-        self.plantFATE_model.init(tstart, tend, newclim)
+        datestart = tstart
+        datediff = datestart - datetime(datestart.year, 1, 1)
+        tstart = datestart.year + datediff.days / 365
+        self.plantFATE_model.init(tstart, newclim)
 
     def simulate(self):
         self.plantFATE_model.simulate()
@@ -191,6 +226,7 @@ class Model:
         return soil_water_potential / 1_000_000  # Pa to MPa
 
     def calculate_vapour_pressure_deficit_kPa(self, temperature, relative_humidity):
+        print('relative_humidity in pfate.pf', relative_humidity)
         assert (
             temperature < 100
         )  # temperature is in Celsius. So on earth should be well below 100.

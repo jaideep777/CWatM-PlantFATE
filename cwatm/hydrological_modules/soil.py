@@ -478,6 +478,8 @@ class soil(object):
             # simply doing the first cell for the time being...
             forest_RU_idx = 0
             #forest_grid = self.var.HRU_to_grid[forest_RU_idx]
+            print('self.var.Tavg in soil.py', self.var.Tavg)
+            print('self.var.Qair in soil.py', self.var.Qair)
 
             plantFATE_data = {
                 "soil_moisture_layer_1": self.var.w1[forest_RU_idx],  # this is not used for now
@@ -492,7 +494,7 @@ class soil(object):
                 "soil_moisture_field_capacity_1": self.var.wfc1[forest_RU_idx],  # this is not used for now
                 "soil_moisture_field_capacity_2": self.var.wfc2[forest_RU_idx],
                 "soil_moisture_field_capacity_3": self.var.wfc3[forest_RU_idx],  # this is not used for now
-                "temperature": self.var.Tavg - 273.15,  # K to C
+                "temperature": self.var.Tavg, #- 273.15,  # K to C
                 "relative_humidity": self.var.Qair,
                 "shortwave_radiation": self.var.Rsds,
             }
@@ -502,8 +504,9 @@ class soil(object):
                     # wants tstart (What format?), with variables like tend (where is this).
                     # Variables in plantFATE_data are different
 
+                    # Todo: here we need to send the cell specific information
                     self.model.plantFATE[m].first_step(
-                        tstart=self.model.current_time, **plantFATE_data
+                        tstart=dateVar['currDate'], **plantFATE_data
                     )
                     self.var.transpiration_plantFATE[m], _, _, _ = (
                         0,
