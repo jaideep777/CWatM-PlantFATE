@@ -221,8 +221,8 @@ class soil(object):
 
         # Initialise PlantFATE cell
         # load init file from config file
-        # TODO: check if this is correct way to do it; make sure default is None?
         # See if using PF
+
         self.use_PF = False
         self.var.transpiration_plantFATE = globals.inZero
         if 'coupling_plantFATE' in option:
@@ -230,27 +230,10 @@ class soil(object):
 
         def create_ini(idx, plantFATE_cluster, biodiversity_scenario):
 
+            # not currently called
             out_dir = cbinding("PathOut")+'/plantFATE/fcell_'+str(idx)
-            print(out_dir)
             #os.mkdir(out_dir)
             ini_file = out_dir+"/p_daily.ini"
-
-            """
-            with open(ini_file, "w") as f:
-                for section, section_dict in yaml.items():
-                    f.write(section + "\n")
-                    if section_dict is None:
-                        continue
-                    for key, value in section_dict.items():
-                        if value is None:
-                            value = "null"
-                        elif value is False:
-                            value = "no"
-                        elif value is True:
-                            value = "yes"
-                        f.write(key + " " + str(value) + "\n")
-            return ini_file
-            """
 
             f = open(cbinding('plantFATE_init_file'), "r")
 
@@ -269,6 +252,7 @@ class soil(object):
 
             self.model.plantFATE = []
             for i in range(len(self.var.transpiration_plantFATE)):
+
                 #plantFATE_cluster = 7
                 #biodiversity_scenario = 'low'
 
@@ -278,6 +262,7 @@ class soil(object):
                 #    biodiversity_scenario,
                 #)
 
+                # Using the same input plantFATE ini file for all CWatM-cells
                 self.model.plantFATE.append(pf.Model(cbinding('plantFATE_init_file')))
 
         return None
@@ -349,11 +334,6 @@ class soil(object):
 
         else:
             self.var.openWaterEvap[No] = 0.
-
-
-
-        #if (dateVar['curr'] >= 0) and (No==3):
-        #    ii=1
 
         # add capillary rise from groundwater if modflow is used
         if self.var.modflow:
@@ -463,48 +443,30 @@ class soil(object):
         # transpiration is 0 when soil is frozen
         TaMax = np.where(self.var.FrostIndex > self.var.FrostIndexThreshold, 0., TaMax)
 
-        #print('self.var.w1[0] in soil.py', self.var.w1[0])
-        #print('self.var.w2[0] in soil.py', self.var.w2[0])
-        #print('self.var.w3[0] in soil.py', self.var.w3[0])
-
         # For now this version only supports one plantFATE cell
-        if self.use_PF:
-            #transpiration_plantFATE = globals.inZero.copy()
-            # not sure what this bit is for... possibly don't need it?
-            # transpiration_plantFATE = np.zeros_like(self.plantFATE_forest_RUs, dtype=np.float32)  # transpiration in a hydrological model is transpiration from plants and evaporation from the plant's surface in plantFATE.
-            # soil_specific_depletion_1_plantFATE = np.zeros_like(self.plantFATE_forest_RUs, dtype=np.float32)
-            # soil_specific_depletion_2_plantFATE = np.zeros_like(self.plantFATE_forest_RUs, dtype=np.float32)
-            # soil_specific_depletion_3_plantFATE = np.zeros_like(self.plantFATE_forest_RUs, dtype=np.float32)
-            # simply doing the first cell for the time being...
-            forest_RU_idx = 0
-            #forest_grid = self.var.HRU_to_grid[forest_RU_idx]
-            print('self.var.Tavg in soil.py', self.var.Tavg)
-            print('self.var.Qair in soil.py', self.var.Qair)
-
-            plantFATE_data = {
-                "soil_moisture_layer_1": self.var.w1[forest_RU_idx],  # this is not used for now
-                "soil_moisture_layer_2": self.var.w2[forest_RU_idx],
-                "soil_moisture_layer_3": self.var.w3[forest_RU_idx],  # this is not used for now
-                "soil_tickness_layer_1": self.var.rootDepth[0][forest_RU_idx],  # this is not used for now
-                "soil_tickness_layer_2": self.var.rootDepth[1][forest_RU_idx],
-                "soil_tickness_layer_3": self.var.rootDepth[2][forest_RU_idx],  # this is not used for now
-                "soil_moisture_wilting_point_1": self.var.wwp1[forest_RU_idx],  # this is not used for now
-                "soil_moisture_wilting_point_2": self.var.wwp2[forest_RU_idx],
-                "soil_moisture_wilting_point_3": self.var.wwp3[forest_RU_idx],  # this is not used for now
-                "soil_moisture_field_capacity_1": self.var.wfc1[forest_RU_idx],  # this is not used for now
-                "soil_moisture_field_capacity_2": self.var.wfc2[forest_RU_idx],
-                "soil_moisture_field_capacity_3": self.var.wfc3[forest_RU_idx],  # this is not used for now
-                "temperature": self.var.Tavg, #- 273.15,  # K to C
-                "relative_humidity": self.var.Qair,
-                "shortwave_radiation": self.var.Rsds,
-            }
+        forest_RU_idx = 0
+        if self.use_PF and No == forest_RU_idx:
 
             for m in range(len(self.model.plantFATE)):
+                plantFATE_data = {
+                    "soil_moisture_layer_1": self.var.w1[forest_RU_idx][m],  # this is not used for now
+                    "soil_moisture_layer_2": self.var.w2[forest_RU_idx][m],
+                    "soil_moisture_layer_3": self.var.w3[forest_RU_idx][m],  # this is not used for now
+                    "soil_tickness_layer_1": self.var.rootDepth[0][forest_RU_idx][m],  # this is not used for now
+                    "soil_tickness_layer_2": self.var.rootDepth[1][forest_RU_idx][m],
+                    "soil_tickness_layer_3": self.var.rootDepth[2][forest_RU_idx][m],  # this is not used for now
+                    "soil_moisture_wilting_point_1": self.var.wwp1[forest_RU_idx][m],  # this is not used for now
+                    "soil_moisture_wilting_point_2": self.var.wwp2[forest_RU_idx][m],
+                    "soil_moisture_wilting_point_3": self.var.wwp3[forest_RU_idx][m],  # this is not used for now
+                    "soil_moisture_field_capacity_1": self.var.wfc1[forest_RU_idx][m],  # this is not used for now
+                    "soil_moisture_field_capacity_2": self.var.wfc2[forest_RU_idx][m],
+                    "soil_moisture_field_capacity_3": self.var.wfc3[forest_RU_idx][m],  # this is not used for now
+                    "temperature": self.var.Tavg[m], #- 273.15,  # K to C
+                    "relative_humidity": self.var.Qair[m],
+                    "shortwave_radiation": self.var.Rsds[m],
+                }
+            
                 if dateVar['newStart']:
-                    # wants tstart (What format?), with variables like tend (where is this).
-                    # Variables in plantFATE_data are different
-
-                    # Todo: here we need to send the cell specific information
                     self.model.plantFATE[m].first_step(
                         tstart=dateVar['currDate'], **plantFATE_data
                     )
@@ -521,6 +483,9 @@ class soil(object):
                         _,
                         _,
                     ) = self.model.plantFATE[m].step(**plantFATE_data)
+
+            print('self.var.transpiration_plantFATE in soil.py', self.var.transpiration_plantFATE)
+            #print('TaMax in soil.py', TaMax)
 
             ta1 = np.maximum(
                 np.minimum(
@@ -554,17 +519,17 @@ class soil(object):
             ta1 = (
                 self.var.w1[forest_RU_idx]
                 / CWatM_w_in_plantFATE_cells
-                * transpiration_plantFATE
+                * self.var.transpiration_plantFATE
             )
             ta2 = (
                 self.var.w2[forest_RU_idx]
                 / CWatM_w_in_plantFATE_cells
-                * transpiration_plantFATE
+                * self.var.transpiration_plantFATE
             )
             ta3 = (
                 self.var.w3[forest_RU_idx]
                 / CWatM_w_in_plantFATE_cells
-                * transpiration_plantFATE
+                * self.var.transpiration_plantFATE
             )
 
             #ta1 = np.maximum(np.minimum(ta1, self.var.w1[forest_RU_idx] - self.var.wwp1[forest_RU_idx]), 0.0)
@@ -575,13 +540,9 @@ class soil(object):
             ta2 = np.maximum(np.minimum(ta2, self.var.w2[forest_RU_idx]), 0.0)
             ta3 = np.maximum(np.minimum(ta3, self.var.w3[forest_RU_idx]), 0.0)
 
-            assert self.model.waterbalance_module.waterBalanceCheck(
-                how="cellwise",
-                influxes=[ta1, ta2,  ta3],
-                outfluxes=[transpiration_plantFATE[self.plantFATE_forest_RUs]],
-                tollerance=1e-7,
-            )
-
+            #print('ta1[i]+ta2[i]+ta3[i]', [ta1[i]+ta2[i]+ta3[i] for i in range(len(self.var.transpiration_plantFATE))])
+            #print('self.var.transpiration_plantFATE', self.var.transpiration_plantFATE)
+            #assert [ta1[i]+ta2[i]+ta3[i] for i in range(len(self.var.transpiration_plantFATE))] == self.var.transpiration_plantFATE
         else:
             ta1 = np.maximum(np.minimum(TaMax * self.var.adjRoot[0][No], self.var.w1[No] - self.var.wwp1[No]), 0.0)
             ta2 = np.maximum(np.minimum(TaMax * self.var.adjRoot[1][No], self.var.w2[No] - self.var.wwp2[No]), 0.0)

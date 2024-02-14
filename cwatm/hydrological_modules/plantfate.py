@@ -166,7 +166,7 @@ class Model:
             shortwave_radiation)  # W/m2, daily mean
 
         newclim = Clim()
-        newclim.tc = temperature - 273.15  # C
+        newclim.tc = temperature #- 273.15  # C
         newclim.ppfd_max = photosynthetic_photon_flux_density * 4
         newclim.ppfd = photosynthetic_photon_flux_density
         newclim.vpd = vapour_pressure_deficit * 1000  # kPa -> Pa
@@ -226,7 +226,6 @@ class Model:
         return soil_water_potential / 1_000_000  # Pa to MPa
 
     def calculate_vapour_pressure_deficit_kPa(self, temperature, relative_humidity):
-        print('relative_humidity in pfate.pf', relative_humidity)
         assert (
             temperature < 100
         )  # temperature is in Celsius. So on earth should be well below 100.
