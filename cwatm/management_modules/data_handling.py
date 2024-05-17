@@ -575,13 +575,21 @@ def readCoordNetCDF(name,check = True):
         # if subroutine is called already from inside a try command
         nf1 = Dataset(name, 'r')
 
+    # print(nf1.variables.keys())
     if not('coordx' in maskmapAttr.keys()):
-        if 'lon' in nf1.variables.keys():
-            maskmapAttr['coordx'] = 'lon'
-            maskmapAttr['coordy'] = 'lat'
+        if 'longitude' in nf1.variables.keys():
+            maskmapAttr['coordx'] = 'longitude'
+            maskmapAttr['coordy'] = 'latitude'
+            print("in longitude")
         else:
-            maskmapAttr['coordx'] = 'x'
-            maskmapAttr['coordy'] = 'y'
+            if 'lon' in nf1.variables.keys():
+                maskmapAttr['coordx'] = 'lon'
+                maskmapAttr['coordy'] = 'lat'
+                print("in lon")
+            else:
+                maskmapAttr['coordx'] = 'x'
+                maskmapAttr['coordy'] = 'y'
+                print("in x")
 
     if 'X' in nf1.variables.keys():
         maskmapAttr['coordx'] = 'X'
@@ -1449,7 +1457,7 @@ def writenetcdf(netfile,prename,addname,varunits,inputmap, timeStamp, posCnt, fl
 
             year = dateVar['dateStart'].year
             if year > 1900:   yearstr = "1901"
-            elif year < 1861: yearstr = "1650"
+            elif year < 1861: yearstr = "0001"
             else:             yearstr = "1861"
 
             #nf1.createDimension('time', None)

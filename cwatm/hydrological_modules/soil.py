@@ -224,9 +224,12 @@ class soil(object):
         # See if using PF
 
         self.use_PF = False
+        self.use_PF_acclim = False
         self.var.transpiration_plantFATE = globals.inZero
         if 'coupling_plantFATE' in option:
             self.use_PF = checkOption('coupling_plantFATE')
+            if 'plantFATE_use_acclim_forcing' in option:
+                self.use_PF_acclim =checkOption('plantFATE_use_acclim_forcing')
 
         def create_ini(idx, plantFATE_cluster, biodiversity_scenario):
 
@@ -263,7 +266,8 @@ class soil(object):
                 #)
 
                 # Using the same input plantFATE ini file for all CWatM-cells
-                self.model.plantFATE.append(pf.Model(cbinding('plantFATE_init_file')))
+                self.model.plantFATE.append(pf.PFatePatch(cbinding('plantFATE_init_file'),
+                                                          cbinding('plantFATE_acclim_file')))
 
         return None
 
@@ -465,11 +469,14 @@ class soil(object):
                     "relative_humidity": self.var.Qair[m],
                     "shortwave_radiation": self.var.Rsds[m],
                 }
-            
+
+
+
                 if dateVar['newStart']:
                     self.model.plantFATE[m].first_step(
                         tstart=dateVar['currDate'], **plantFATE_data
                     )
+                    print(dateVar['newStart'])
                     self.var.transpiration_plantFATE[m], _, _, _ = (
                         0,
                         0,
@@ -477,12 +484,13 @@ class soil(object):
                         0,
                     )  # first timestep, set all to 0. Just for initialization of spinup.
                 else:
+                    print(dateVar['currDate'])
                     (
                         self.var.transpiration_plantFATE[m],
                         _,
                         _,
                         _,
-                    ) = self.model.plantFATE[m].step(**plantFATE_data)
+                    ) = self.model.plantFATE[m].step(dateVar['currDate'], **plantFATE_data)
 
             print('self.var.transpiration_plantFATE in soil.py', self.var.transpiration_plantFATE)
             #print('TaMax in soil.py', TaMax)

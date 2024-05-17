@@ -101,6 +101,8 @@ class CWATModel_dyn(DynamicModel):
 
         self.waterquality1.dynamic()
 
+        # TODO: insert plantFATE close / finalise function
+
         # calculate Total water storage (tws) [m] as a sum of
         # Groundwater [m] + soil [m] + lake and reservoir storage [m3] + channel storage [m3]
         # [m3] >> [m] --> * InvCellArea

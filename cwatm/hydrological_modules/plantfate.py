@@ -3,31 +3,28 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
-from plantFATE import Simulator as sim
-from plantFATE import Clim
+from pypfate import Patch as patch
+from pypfate import Clim
 
 # Module will be moved to plantFATE package eventually and called from there
 
-class Model:
-    def __init__(self, param_file):
-        self.plantFATE_model = sim(str(param_file))
-        self.environment = pd.DataFrame(
-            columns=[
-                "date",
-                "tair",
-                "ppfd_max",
-                "ppfd",
-                "vpd",
-                "elv",
-                "co2",
-                "swp",
-                "type",
-            ]
-        )
-        self.emergentProps = pd.DataFrame()
-        self.speciesProps = pd.DataFrame()
+class PFatePatch:
+    def __init__(self, param_file, acclim_forcing_file):
+        self.patch = patch(str(param_file))
+        self.time_unit_base = self.process_time_units()
+        self.tcurrent = 0
+        self.time = []
+        self.swp = []
+        self.swc = []
+        self.trans = []
+        self.acclimation_forcing = self.read_acclimation_file(acclim_forcing_file)
 
-
+    def read_acclimation_file(self, file):
+        df = pd.read_csv(file)
+        alldates = df['date'].map(lambda x: datetime.strptime(x, "%Y/%m/%d") - self.time_unit_base)
+        alldates = alldates.map(lambda x: x.days - 1)
+        df['date_jul'] = alldates
+        return df
 
     def runstep(
         self,
@@ -36,93 +33,25 @@ class Model:
         photosynthetic_photon_flux_density,
         temperature,
     ):
-        self.plantFATE_model.update_environment(
+        self.patch.update_climate(
+            368.9, # co2 - need to make it better
             temperature,
-            photosynthetic_photon_flux_density * 4,
-            photosynthetic_photon_flux_density,
             vapour_pressure_deficit * 1000,
-            np.nan,
-            np.nan,
+            photosynthetic_photon_flux_density,
             soil_water_potential,
         )
-        self.plantFATE_model.simulate_step()
-
-        # self.saveEnvironment()
-        # self.saveEmergentProps()
-
-        trans = self.plantFATE_model.props.trans / 365
+        index_acclim = self.acclimation_forcing.index[self.acclimation_forcing['date_jul'] == self.tcurrent].tolist()
+        self.patch.update_climate_acclim(self.tcurrent,
+                                         368.9,
+                                         self.acclimation_forcing.loc[index_acclim, 'temp.C.'],
+                                         self.acclimation_forcing.loc[index_acclim, 'vpd'],
+                                         self.calculate_photosynthetic_photon_flux_density(self.acclimation_forcing.loc[index_acclim, 'shortwave.W.m2.']),
+                                         soil_water_potential)
+        self.patch.simulate_to(self.tcurrent)
+        trans = self.patch.props.fluxes.trans / 365
         # return evapotranspiration, soil_specific_depletion_1, soil_specific_depletion_2, soil_specific_depletion_3
         return trans, 0, 0, 0
 
-    def saveEnvironment(self):
-        e = pd.DataFrame(
-            {
-                "date": [
-                    self.plantFATE_model.E.tcurrent,
-                    self.plantFATE_model.E.tcurrent,
-                ],
-                "tair": [
-                    self.plantFATE_model.E.weightedAveClim.tc,
-                    self.plantFATE_model.E.currentClim.tc,
-                ],
-                "ppfd_max": [
-                    self.plantFATE_model.E.weightedAveClim.ppfd_max,
-                    self.plantFATE_model.E.currentClim.ppfd_max,
-                ],
-                "ppfd": [
-                    self.plantFATE_model.E.weightedAveClim.ppfd,
-                    self.plantFATE_model.E.currentClim.ppfd,
-                ],
-                "vpd": [
-                    self.plantFATE_model.E.weightedAveClim.vpd,
-                    self.plantFATE_model.E.currentClim.vpd,
-                ],
-                "elv": [
-                    self.plantFATE_model.E.weightedAveClim.elv,
-                    self.plantFATE_model.E.currentClim.elv,
-                ],
-                "co2": [
-                    self.plantFATE_model.E.weightedAveClim.co2,
-                    self.plantFATE_model.E.currentClim.co2,
-                ],
-                "swp": [
-                    self.plantFATE_model.E.weightedAveClim.swp,
-                    self.plantFATE_model.E.currentClim.swp,
-                ],
-                "type": ["WeightedAverage", "Instantaneous"],
-            }
-        )
-
-        self.environment = pd.concat([self.environment, e])
-
-    def saveEmergentProps(self):
-        e = pd.DataFrame(
-            {
-                "date": [self.plantFATE_model.tcurrent],
-                "trans": [self.plantFATE_model.props.trans / 365],
-                "gs": [self.plantFATE_model.props.gs],
-                "gpp": [self.plantFATE_model.props.gpp * 0.5 / 365 * 1000],
-                "lai": [self.plantFATE_model.props.lai],
-                "npp": [self.plantFATE_model.props.npp * 0.5 / 365 * 1000],
-                "cc_est": [self.plantFATE_model.props.cc_est],
-                "croot_mass": [self.plantFATE_model.props.croot_mass * 1000 * 0.5],
-                "froot_mass": [self.plantFATE_model.props.froot_mass * 1000 * 0.5],
-                "lai_vert": [self.plantFATE_model.props.lai_vert],
-                "leaf_mass": [self.plantFATE_model.props.leaf_mass * 1000 * 0.5],
-                "resp_auto": [self.plantFATE_model.props.resp_auto * 0.5 / 365 * 1000],
-                "stem_mass": [self.plantFATE_model.props.stem_mass * 1000 * 0.5],
-            }
-        )
-        self.emergentProps = pd.concat([self.emergentProps, e])
-
-    def exportEnvironment(self, out_file):
-        self.environment.to_csv(out_file, sep=",", index=False, encoding="utf-8")
-
-    def exportEmergentProps(self, out_file):
-        self.emergentProps.to_csv(out_file, sep=",", index=False, encoding="utf-8")
-
-    def exportSpeciesProps(self, out_file):
-        self.speciesProps.to_csv(out_file, sep=",", index=False, encoding="utf-8")
 
     def first_step(
         self,
@@ -133,7 +62,7 @@ class Model:
         soil_tickness_layer_1,  # m
         soil_tickness_layer_2,  # m
         soil_tickness_layer_3,  # m
-        soil_moisture_wilting_point_1,  # ratio [0-1]
+        soil_moisture_wilting_point_1,  # ratio [0-1]print(type(time_unit_base))
         soil_moisture_wilting_point_2,  # ratio [0-1]
         soil_moisture_wilting_point_3,  # ratio [0-1]
         soil_moisture_field_capacity_1,  # ratio [0-1]
@@ -172,13 +101,47 @@ class Model:
         newclim.vpd = vapour_pressure_deficit * 1000  # kPa -> Pa
         newclim.swp = soil_water_potential  # MPa
 
-        datestart = tstart
-        datediff = datestart - datetime(datestart.year, 1, 1)
-        tstart = datestart.year + datediff.days / 365
-        self.plantFATE_model.init(tstart, newclim)
+
+        # Convert time to proper units according to the time unit base
+        datestart = datetime(tstart.year, tstart.month, tstart.day)
+        datediff = datestart - self.time_unit_base
+        datediff = datediff.days - 1
+
+
+
+        self.swp.append(soil_water_potential)
+        self.swc.append(soil_moisture_layer_2)
+        self.trans.append(0)
+        self.time.append(datestart)
+        self.patch.init(datediff, datediff + 1000)
+        self.tcurrent = datediff
+        self.patch.update_climate(368.9, temperature, vapour_pressure_deficit * 1000, photosynthetic_photon_flux_density, soil_water_potential)
+        # TODO: change to be using panda input
+        index_acclim = self.acclimation_forcing.index[self.acclimation_forcing['date_jul'] == self.tcurrent].tolist()
+        self.patch.update_climate_acclim(self.tcurrent,
+                                         368.9,
+                                         self.acclimation_forcing.loc[index_acclim, 'temp.C.'],
+                                         self.acclimation_forcing.loc[index_acclim, 'vpd'],
+                                         self.calculate_photosynthetic_photon_flux_density(self.acclimation_forcing.loc[index_acclim, 'shortwave.W.m2.']),
+                                         soil_water_potential)
+
+    def process_time_units(self):
+        time_unit = self.patch.config.time_unit
+        time_unit = time_unit.split()
+        if time_unit[0] != 'days' or time_unit[1] != 'since':
+            print("wrong plantfate unit; cwatm supports only daily timescale")
+            return
+        else:
+            time_unit = time_unit[2].split("-")
+            return datetime(int(time_unit[0]),
+                            int(time_unit[1]),
+                            int(time_unit[2]))
+
+    # def read_acclimation_file(self):
+    #     acclimation_file = self.patch.config.
 
     def simulate(self):
-        self.plantFATE_model.simulate()
+        self.patch.simulate()
 
     def calculate_soil_water_potential_MPa(
         self,
@@ -304,6 +267,7 @@ class Model:
 
     def step(
         self,
+        curr_time,
         soil_moisture_layer_1,  # ratio [0-1]
         soil_moisture_layer_2,  # ratio [0-1]
         soil_moisture_layer_3,  # ratio [0-1]
@@ -343,6 +307,11 @@ class Model:
             shortwave_radiation,  # W/m2, daily mean
         )
 
+        curr_time_dt = datetime(curr_time.year, curr_time.month, curr_time.day)
+        timediff = curr_time_dt - self.time_unit_base
+        self.tcurrent = timediff.days - 1
+
+
         (
             evapotranspiration,
             soil_specific_depletion_1,
@@ -352,8 +321,13 @@ class Model:
             soil_water_potential,
             vapour_pressure_deficit,
             photosynthetic_photon_flux_density,
-            temperature,
+            temperature
         )
+
+        self.swp.append(soil_water_potential)
+        self.swc.append(soil_moisture_layer_2)
+        self.time.append(curr_time_dt)
+        self.trans.append(evapotranspiration)
 
         soil_specific_depletion_1 = (
             np.nan
@@ -365,6 +339,14 @@ class Model:
             np.nan
         )  # this is currently not calculated in plantFATE, so just setting to np.nan to avoid confusion
 
+        if curr_time.month == 12 and curr_time.day == 31:
+            df = pd.DataFrame(data={'Time': self.time,
+                                    'SWP': self.swp,
+                                    'SWC': self.swc,
+                                    'Trans': self.trans})
+            # write the DataFrame to a CSV file
+            df.to_csv('Soil_Water.csv')
+
         evapotranspiration = evapotranspiration / 1000  # kg H2O/m2/day to m/day
 
         return (
@@ -375,12 +357,21 @@ class Model:
         )
 
     def finalize(self):
-        self.plantFATE_model.close()
+
+        # create a Pandas DataFrame from the dictionary
+        df = pd.DataFrame(data={'Time': range(1, len(self.swp)),
+                'SWP': self.swp})
+        print(df)
+        # write the DataFrame to a CSV file
+        df.to_csv('SWP.csv')
+        print(self.swp)
+        print("closing patch")
+        self.patch.close()
 
     @property
     def n_individuals(self):
-        return sum(self.plantFATE_model.cwm.n_ind_vec)
+        return sum(self.patch.props.structure.n_ind_vec)
 
     @property
     def biomass(self):
-        return sum(self.plantFATE_model.cwm.biomass_vec)  # kgC / m2
+        return sum(self.patch.cwm.biomass_vec)  # kgC / m2
