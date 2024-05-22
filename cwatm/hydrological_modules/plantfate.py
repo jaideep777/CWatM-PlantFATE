@@ -234,7 +234,8 @@ class PFatePatch:
         net_radiation = shortwave_radiation_downwelling * (1-albedo) - longwave_radiation_net # W/m2
         return net_radiation
 
-    def calculate_actual_soil_evaporation(self, potential_soil_evaporation, topsoil_volumetric_content):
+    def calculate_actual_soil_evaporation(self, potential_soil_evaporation, topsoil_water_content, topsoil_wilting_point, topsoil_fieldcap):
+        topsoil_volumetric_content = (topsoil_water_content - topsoil_wilting_point)/(topsoil_fieldcap - topsoil_wilting_point)
         actual_soil_evaporation = potential_soil_evaporation * topsoil_volumetric_content
         return actual_soil_evaporation
 

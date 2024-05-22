@@ -311,10 +311,10 @@ class evaporationPot(object):
             RsRso = 1.35 * self.var.Rsds/Rso - 0.35
             RsRso = np.minimum(np.maximum(RsRso, 0.05), 1)
             EmNet = (0.34 - 0.14 * np.sqrt(self.var.EAct))  # Eact in hPa but needed in kPa : kpa = 0.1 * hPa - conversion done in readmeteo
-            RLN = RNup * EmNet * RsRso
+            self.var.RLN = RNup * EmNet * RsRso
 
         else:
-            RLN = RNup - self.var.Rsdl
+            self.var.RLN = RNup - self.var.Rsdl
             # RDL is stored on disk as W/m2 but converted in MJ/m2/s in readmeteo.py
 
         if returnBool('albedo'):

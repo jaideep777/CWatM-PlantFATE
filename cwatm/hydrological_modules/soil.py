@@ -453,8 +453,6 @@ class soil(object):
 
             for m in range(len(self.model.plantFATE)):
                 # TODO double check these values or get from evaporationPot.py
-                albedoLand = readnetcdf2('albedoMaps', dateVar['currDate'], useDaily='month', value='albedoLand')
-                longwave_radiation_net = 0
                 plantFATE_data = {
                     "soil_moisture_layer_1": self.var.w1[forest_RU_idx][m],  # this is not used for now
                     "soil_moisture_layer_2": self.var.w2[forest_RU_idx][m],
@@ -471,8 +469,8 @@ class soil(object):
                     "temperature": self.var.Tavg[m], #- 273.15,  # K to C
                     "relative_humidity": self.var.Qair[m],
                     "shortwave_radiation_downwelling": self.var.Rsds[m],
-                    "longwave_radiation_net": longwave_radiation_net,
-                    "albedo": albedoLand
+                    "longwave_radiation_net": self.var.RLN,
+                    "albedo": self.var.albedoLand
                 }
 
 
