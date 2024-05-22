@@ -32,6 +32,8 @@ class PFatePatch:
         vapour_pressure_deficit,
         photosynthetic_photon_flux_density,
         temperature,
+        net_radiation,
+        topsoil_volumetric_water_content
     ):
         self.patch.update_climate(
             368.9, # co2 - need to make it better
@@ -39,6 +41,7 @@ class PFatePatch:
             vapour_pressure_deficit * 1000,
             photosynthetic_photon_flux_density,
             soil_water_potential,
+            net_radiation
         )
         index_acclim = self.acclimation_forcing.index[self.acclimation_forcing['date_jul'] == self.tcurrent].tolist()
         self.patch.update_climate_acclim(self.tcurrent,
@@ -49,8 +52,11 @@ class PFatePatch:
                                          soil_water_potential)
         self.patch.simulate_to(self.tcurrent)
         trans = self.patch.props.fluxes.trans / 365
+        # TODO: return the potential soil evapotranspiration once available from plantfate communities
+        soil_evaporation = self.calculate_actual_soil_evaporation(0, topsoil_volumetric_water_content)
+        evapotranspiration = trans + soil_evaporation
         # return evapotranspiration, soil_specific_depletion_1, soil_specific_depletion_2, soil_specific_depletion_3
-        return trans, 0, 0, 0
+        return evapotranspiration, 0, 0, 0
 
 
     def first_step(
@@ -70,13 +76,16 @@ class PFatePatch:
         soil_moisture_field_capacity_3,  # ratio [0-1]
         temperature,  # degrees Celcius, mean temperature
         relative_humidity,  # percentage [0-100]
-        shortwave_radiation,  # W/m2, daily mean
+        shortwave_radiation_downwelling,  # W/m2, daily mean
+        longwave_radiation_net,
+        albedo
     ):
         (
             soil_water_potential,
             vapour_pressure_deficit,
             photosynthetic_photon_flux_density,
             temperature,
+            net_radiation
         ) = self.get_plantFATE_input(
             soil_moisture_layer_1,  # ratio [0-1]
             soil_moisture_layer_2,  # ratio [0-1]
@@ -92,7 +101,9 @@ class PFatePatch:
             soil_moisture_field_capacity_3,  # ratio [0-1]
             temperature,  # degrees Celcius, mean temperature
             relative_humidity,  # percentage [0-100]
-            shortwave_radiation)  # W/m2, daily mean
+            shortwave_radiation_downwelling,
+            longwave_radiation_net,
+            albedo)  # W/m2, daily mean
 
         newclim = Clim()
         newclim.tc = temperature #- 273.15  # C
@@ -115,14 +126,18 @@ class PFatePatch:
         self.time.append(datestart)
         self.patch.init(datediff, datediff + 1000)
         self.tcurrent = datediff
-        self.patch.update_climate(368.9, temperature, vapour_pressure_deficit * 1000, photosynthetic_photon_flux_density, soil_water_potential)
-        # TODO: change to be using panda input
+        self.patch.update_climate(368.9,
+                                  temperature,
+                                  vapour_pressure_deficit * 1000,
+                                  photosynthetic_photon_flux_density,
+                                  soil_water_potential,
+                                  net_radiation)
         index_acclim = self.acclimation_forcing.index[self.acclimation_forcing['date_jul'] == self.tcurrent].tolist()
         self.patch.update_climate_acclim(self.tcurrent,
                                          368.9,
                                          self.acclimation_forcing.loc[index_acclim, 'temp.C.'],
                                          self.acclimation_forcing.loc[index_acclim, 'vpd'],
-                                         self.calculate_photosynthetic_photon_flux_density(self.acclimation_forcing.loc[index_acclim, 'shortwave.W.m2.']),
+                                         self.calculate_photosynthetic_photon_flux_density(self.acclimation_forcing.loc[index_acclim, 'shortwave.W.m2.'], albedo),
                                          soil_water_potential)
 
     def process_time_units(self):
@@ -208,13 +223,20 @@ class PFatePatch:
         vapour_pressure_deficit = saturated_vapour_pressure - actual_vapour_pressure
         return vapour_pressure_deficit
 
-    def calculate_photosynthetic_photon_flux_density(self, shortwave_radiation, xi=0.5):
-        # https://search.r-project.org/CRAN/refmans/bigleaf/html/Rg.to.PPFD.html
-        photosynthetically_active_radiation = shortwave_radiation * xi
-        photosynthetic_photon_flux_density = (
-            photosynthetically_active_radiation * 4.6
-        )  #  W/m2 -> umol/m2/s
+    def calculate_photosynthetic_photon_flux_density(self,
+                                                     shortwave_radiation_downwelling,  # W/m2
+                                                     albedo):  # [0-1]
+        photosynthetic_photon_flux_density = shortwave_radiation_downwelling * (1-albedo) * 2.04 # umol/m2/s
         return photosynthetic_photon_flux_density
+
+    def calculate_net_radiation(self, shortwave_radiation_downwelling, longwave_radiation_net, albedo):
+        # TODO calculate this value
+        net_radiation = shortwave_radiation_downwelling * (1-albedo) - longwave_radiation_net # W/m2
+        return net_radiation
+
+    def calculate_actual_soil_evaporation(self, potential_soil_evaporation, topsoil_volumetric_content):
+        actual_soil_evaporation = potential_soil_evaporation * topsoil_volumetric_content
+        return actual_soil_evaporation
 
     def get_plantFATE_input(
         self,
@@ -232,7 +254,9 @@ class PFatePatch:
         soil_moisture_field_capacity_3,  # m
         temperature,  # degrees Celcius, mean temperature
         relative_humidity,  # percentage [0-100]
-        shortwave_radiation,  # W/m2, daily mean
+        shortwave_radiation_downwelling,  # W/m2, daily mean
+        longwave_radiation_net,
+        albedo
     ):
         assert (
             temperature < 100
@@ -255,14 +279,17 @@ class PFatePatch:
         )
 
         photosynthetic_photon_flux_density = (
-            self.calculate_photosynthetic_photon_flux_density(shortwave_radiation)
+            self.calculate_photosynthetic_photon_flux_density(shortwave_radiation_downwelling, albedo)
         )
+
+        net_radiation = self.calculate_net_radiation(shortwave_radiation_downwelling, longwave_radiation_net, albedo)
 
         return (
             soil_water_potential,
             vapour_pressure_deficit,
             photosynthetic_photon_flux_density,
             temperature,
+            net_radiation
         )
 
     def step(
@@ -282,13 +309,16 @@ class PFatePatch:
         soil_moisture_field_capacity_3,  # ratio [0-1]
         temperature,  # degrees Celcius, mean temperature
         relative_humidity,  # percentage [0-100]
-        shortwave_radiation,  # W/m2, daily mean
+        shortwave_radiation_downwelling,  # W/m2, daily mean
+        longwave_radiation_net,
+        albedo
     ):
         (
             soil_water_potential,
             vapour_pressure_deficit,
             photosynthetic_photon_flux_density,
             temperature,
+            net_radiation
         ) = self.get_plantFATE_input(
             soil_moisture_layer_1,  # ratio [0-1]
             soil_moisture_layer_2,  # ratio [0-1]
@@ -304,7 +334,9 @@ class PFatePatch:
             soil_moisture_field_capacity_3,  # ratio [0-1]
             temperature,  # degrees Celcius, mean temperature
             relative_humidity,  # percentage [0-100]
-            shortwave_radiation,  # W/m2, daily mean
+            shortwave_radiation_downwelling,  # W/m2, daily mean
+            longwave_radiation_net,
+            albedo
         )
 
         curr_time_dt = datetime(curr_time.year, curr_time.month, curr_time.day)
@@ -321,7 +353,9 @@ class PFatePatch:
             soil_water_potential,
             vapour_pressure_deficit,
             photosynthetic_photon_flux_density,
-            temperature
+            temperature,
+            net_radiation,
+            soil_moisture_layer_1
         )
 
         self.swp.append(soil_water_potential)
