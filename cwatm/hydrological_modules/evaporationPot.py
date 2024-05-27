@@ -81,6 +81,9 @@ class evaporationPot(object):
             self.var.crop_correct_landCover[2] = loadmap('crop_correct_irrpaddy')
         if 'crop_correct_irrnonpaddy' in binding:
             self.var.crop_correct_landCover[3] = loadmap('crop_correct_irrnonpaddy')
+        self.var.RNA = globals.inZero.copy()
+        self.var.RNAN = globals.inZero.copy()
+        self.var.RLN = globals.inZero.copy()
 
         if checkOption('calc_evaporation'):
             # Default calculation method is Penman Monteith
@@ -180,6 +183,7 @@ class evaporationPot(object):
             RsRso = np.minimum(np.maximum(RsRso, 0.05), 1)
             EmNet = (0.34 - 0.14 * np.sqrt(self.var.EAct))  # Eact in hPa but needed in kPa : kpa = 0.1 * hPa - conversion done in readmeteo
             RLN = RNup * EmNet * RsRso
+            self.var.RLN = RLN.copy()
             # Equation 39 Chapter 3
 
             Psycon = 0.00163 * (101.3 / LatHeatVap)
@@ -215,6 +219,7 @@ class evaporationPot(object):
                 self.var.EAct = ESat * self.var.Qair / 100.0
                 # longwave radiation balance
             RLN = RNup - self.var.Rsdl
+            self.var.RLN = RLN.copy()
             # RDL is stored on disk as W/m2 but converted in MJ/m2/s in readmeteo.py
 
         # ************************************************************
@@ -226,10 +231,12 @@ class evaporationPot(object):
                 self.var.albedoLand = readnetcdf2('albedoMaps', dateVar['currDate'], useDaily='month',value='albedoLand')
                 self.var.albedoOpenWater = readnetcdf2('albedoMaps', dateVar['currDate'], useDaily='month',value='albedoWater')
             RNA = np.maximum(((1 - self.var.albedoLand) * self.var.Rsds - RLN) / LatHeatVap, 0.0)
+            self.var.RNA = RNA.copy()
             RNAWater = np.maximum(((1 - self.var.albedoOpenWater) * self.var.Rsds - RLN) / LatHeatVap, 0.0)
 
         else:
             RNA = np.maximum(((1 - self.var.AlbedoCanopy) * self.var.Rsds - RLN) / LatHeatVap, 0.0)
+            self.var.RNA = RNA.copy()
             # net absorbed radiation of reference vegetation canopy [mm/d]
             # RNASoil = np.maximum(((1 - self.var.AlbedoSoil) * self.var.Rsds - RLN) / LatHeatVap, 0.0)
             # net absorbed radiation of bare soil surface
@@ -255,6 +262,7 @@ class evaporationPot(object):
         # the 0.408 constant is replace by 1/LatHeatVap see above
 
         RNAN = RNA * numerator1
+        self.var.RNAN = RNAN.copy()
         #RNANSoil = RNASoil * numerator1
         RNANWater = RNAWater * numerator1
 
@@ -311,10 +319,12 @@ class evaporationPot(object):
             RsRso = 1.35 * self.var.Rsds/Rso - 0.35
             RsRso = np.minimum(np.maximum(RsRso, 0.05), 1)
             EmNet = (0.34 - 0.14 * np.sqrt(self.var.EAct))  # Eact in hPa but needed in kPa : kpa = 0.1 * hPa - conversion done in readmeteo
-            self.var.RLN = RNup * EmNet * RsRso
+            RLN = RNup * EmNet * RsRso
+            self.var.RLN = RLN.copy()
 
         else:
-            self.var.RLN = RNup - self.var.Rsdl
+            RLN = RNup - self.var.Rsdl
+            self.var.RLN = RLN.copy()
             # RDL is stored on disk as W/m2 but converted in MJ/m2/s in readmeteo.py
 
         if returnBool('albedo'):
@@ -322,10 +332,12 @@ class evaporationPot(object):
                 self.var.albedoLand = readnetcdf2('albedoMaps', dateVar['currDate'], useDaily='month',value='albedoLand')
                 self.var.albedoOpenWater = readnetcdf2('albedoMaps', dateVar['currDate'], useDaily='month',value='albedoWater')
             RNA = np.maximum(((1 - self.var.albedoLand) * self.var.Rsds - RLN) / LatHeatVap, 0.0)
+            self.var.RNA = RNA.copy()
             RNAWater = np.maximum(((1 - self.var.albedoOpenWater) * self.var.Rsds - RLN) / LatHeatVap, 0.0)
 
         else:
             RNA = np.maximum(((1 - self.var.AlbedoCanopy) * self.var.Rsds - RLN) / LatHeatVap, 0.0)
+            self.var.RNA = RNA.copy()
             # net absorbed radiation of reference vegetation canopy [mm/d]
             # RNASoil = np.maximum(((1 - self.var.AlbedoSoil) * self.var.Rsds - RLN) / LatHeatVap, 0.0)
             # net absorbed radiation of bare soil surface
@@ -376,6 +388,7 @@ class evaporationPot(object):
             RsRso = np.minimum(np.maximum(RsRso, 0.05), 1)
             EmNet = (0.34 - 0.14 * np.sqrt(self.var.EAct))  # Eact in hPa but needed in kPa : kpa = 0.1 * hPa - conversion done in readmeteo
             RLN = RNup * EmNet * RsRso
+            self.var.RLN = RLN.copy()
 
             Psycon = 0.00163 * (101.3 / LatHeatVap)
             # psychrometric constant at sea level [mbar/deg C]
@@ -388,6 +401,7 @@ class evaporationPot(object):
 
         else:
             RLN = RNup - self.var.Rsdl
+            self.var.RLN = RLN.copy()
             Psycon = 0.665E-3 * self.var.Psurf
             # psychrometric constant [kPa C-1]
             # http://www.fao.org/docrep/ X0490E/ x0490e07.htm  Equation 8
@@ -395,12 +409,14 @@ class evaporationPot(object):
 
         # RDL is stored on disk as W/m2 but converted in MJ/m2/s in readmeteo.py
         RNA = np.maximum(((1 - self.var.AlbedoCanopy) * self.var.Rsds - RLN) / LatHeatVap, 0.0)
+        self.var.RNA = RNA.copy()
         RNAWater = np.maximum(((1 - self.var.AlbedoWater) * self.var.Rsds - RLN) / LatHeatVap, 0.0)
 
         Delta = ((4098.0 * ESat) / ((self.var.Tavg + 237.3)**2))
         # slope of saturated vapour pressure curve [mbar/deg C]
 
         RNAN = 1.1 * Delta / (Delta + Psycon)  * RNA
+        self.var.RNAN = RNAN.copy()
         #RNANSoil = RNASoil * numerator1
         RNANWater = 1.26 * Delta / (Delta + Psycon) * RNAWater
 

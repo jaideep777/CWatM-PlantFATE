@@ -21,7 +21,7 @@ class PFatePatch:
 
     def read_acclimation_file(self, file):
         df = pd.read_csv(file)
-        alldates = df['date'].map(lambda x: datetime.strptime(x, "%Y/%m/%d") - self.time_unit_base)
+        alldates = df['date'].map(lambda x: datetime.strptime(x, "%Y-%m-%d") - self.time_unit_base)
         alldates = alldates.map(lambda x: x.days - 1)
         df['date_jul'] = alldates
         return df
@@ -52,8 +52,8 @@ class PFatePatch:
                                          soil_water_potential)
         self.patch.simulate_to(self.tcurrent)
         trans = self.patch.props.fluxes.trans / 365
-        # TODO: return the potential soil evapotranspiration once available from plantfate communities
-        soil_evaporation = self.calculate_actual_soil_evaporation(0, topsoil_volumetric_water_content)
+        potential_soil_evaporation = self.patch.props.fluxes.pe_soil
+        soil_evaporation = self.calculate_actual_soil_evaporation(potential_soil_evaporation, topsoil_volumetric_water_content)
         evapotranspiration = trans + soil_evaporation
         # return evapotranspiration, soil_specific_depletion_1, soil_specific_depletion_2, soil_specific_depletion_3
         return evapotranspiration, 0, 0, 0
