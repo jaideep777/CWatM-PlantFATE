@@ -480,7 +480,8 @@ class soil(object):
                         tstart=dateVar['currDate'], **plantFATE_data
                     )
                     print(dateVar['newStart'])
-                    self.var.transpiration_plantFATE[m], _, _, _ = (
+                    self.var.transpiration_plantFATE[m], self.var.soil_evap, _, _, _ = (
+                        0,
                         0,
                         0,
                         0,
@@ -490,6 +491,7 @@ class soil(object):
                     print(dateVar['currDate'])
                     (
                         self.var.transpiration_plantFATE[m],
+                        self.var.soil_evap,
                         _,
                         _,
                         _,
@@ -520,11 +522,20 @@ class soil(object):
                 0.0,
             )
 
+            # ta0 => soil evaporation from top soil
+            ta0 = (
+                    self.var.w1[forest_RU_idx]-self.var.soil_evap #TODO evap self.var.transpiration_plantFATE
+            )
+
+            self.var.w1[forest_RU_idx] -= ta0
+
             CWatM_w_in_plantFATE_cells = (
                 self.var.w1[forest_RU_idx]
                 + self.var.w2[forest_RU_idx]
                 + self.var.w3[forest_RU_idx]
             )
+
+            # step 1: evaporation coming out of ta1
 
             #bioarea_forest = self.plantFATE_forest_RUs[bioarea]
             ta1 = (
@@ -836,7 +847,7 @@ class soil(object):
 
         # ---------------------------------------------------------------------------------------------
         # total actual transpiration
-        self.var.actTransTotal[No] = ta1 + ta2 + ta3
+        self.var.actTransTotal[No] = ta0 + ta1 + ta2 + ta3
 
         self.var.actTransTotal_forest = self.var.actTransTotal[0] * self.var.fracVegCover[0]
         self.var.actTransTotal_grasslands = self.var.actTransTotal[1] * self.var.fracVegCover[1]

@@ -16,6 +16,8 @@ class PFatePatch:
         self.time = []
         self.swp = []
         self.swc = []
+        self.smi = []
+        self.se = []
         self.trans = []
         self.acclimation_forcing = self.read_acclimation_file(acclim_forcing_file)
 
@@ -55,6 +57,8 @@ class PFatePatch:
         potential_soil_evaporation = self.patch.props.fluxes.pe_soil
         soil_evaporation = self.calculate_actual_soil_evaporation(potential_soil_evaporation, topsoil_volumetric_water_content)
         evapotranspiration = trans + soil_evaporation
+        self.trans.append(trans)
+        self.se.append(soil_evaporation)
         # return evapotranspiration, soil_specific_depletion_1, soil_specific_depletion_2, soil_specific_depletion_3
         return evapotranspiration, 0, 0, 0
 
@@ -121,7 +125,9 @@ class PFatePatch:
 
 
         self.swp.append(soil_water_potential)
-        self.swc.append(soil_moisture_layer_2)
+        self.swc.append(soil_moisture_layer_1 + soil_moisture_layer_2 + soil_moisture_layer_3)
+        self.smi.append(self.calculate)
+        self.se.append(0)
         self.trans.append(0)
         self.time.append(datestart)
         self.patch.init(datediff, datediff + 1000)
@@ -360,9 +366,9 @@ class PFatePatch:
         )
 
         self.swp.append(soil_water_potential)
-        self.swc.append(soil_moisture_layer_2)
+        self.swc.append(soil_moisture_layer_1 + soil_moisture_layer_2 + soil_moisture_layer_3)
         self.time.append(curr_time_dt)
-        self.trans.append(evapotranspiration)
+
 
         soil_specific_depletion_1 = (
             np.nan
