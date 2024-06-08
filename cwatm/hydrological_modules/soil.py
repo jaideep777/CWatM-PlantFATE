@@ -470,6 +470,7 @@ class soil(object):
                     "relative_humidity": self.var.Qair[m],
                     "shortwave_radiation_downwelling": self.var.Rsds[m],
                     "longwave_radiation_net": self.var.RLN,
+                    #"radiation_net": self.var.RNA,
                     "albedo": self.var.albedoLand
                 }
 
@@ -487,6 +488,8 @@ class soil(object):
                         0,
                         0,
                     )  # first timestep, set all to 0. Just for initialization of spinup.
+                # else if: current date % 7 == 0
+                # 
                 else:
                     print(dateVar['currDate'])
                     (
@@ -574,6 +577,7 @@ class soil(object):
         #    ii=1
         #   #print ('t', self.var.w1[No][0:3])
 
+        # This might have to be protected from going below wilting point (wres1) follow line 588
         self.var.w1[No] = self.var.w1[No] - ta1
         self.var.w2[No] = self.var.w2[No] - ta2
         self.var.w3[No] = self.var.w3[No] - ta3
